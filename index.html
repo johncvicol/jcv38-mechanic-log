@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="JCV38 Shop">
+<title>JCV38 Corp — Mechanic Work Log</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
+  :root {
+    --bg:#f0f2f5; --surface:#fff; --border:#b0b8c9; --red:#c0392b; --red-light:#e74c3c;
+    --text:#1a1f2e; --text-muted:#7a8499; --radius:10px; --success:#27ae60; --amber:#d99b20;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Barlow',sans-serif; min-height:100vh;
+         display:flex; flex-direction:column; align-items:center; padding-bottom:48px; }
+  .header { width:100%; background:#fff; border-bottom:3px solid var(--red); box-shadow:0 2px 12px rgba(0,0,0,.08);
+            padding:18px 24px 14px; display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:22px; }
+  .wordmark { font-family:'Barlow Condensed',sans-serif; font-weight:900; font-size:2.1rem; letter-spacing:.04em; line-height:1; }
+  .wordmark span { color:var(--red); }
+  .header-sub { font-family:'Barlow Condensed',sans-serif; font-size:.75rem; font-weight:700; letter-spacing:.18em;
+                text-transform:uppercase; color:var(--text-muted); }
+  .card { width:100%; max-width:460px; padding:0 16px; }
+  .timestamp-badge { text-align:center; font-size:.72rem; color:var(--text-muted); margin-bottom:10px; padding:8px 14px;
+                     background:#fff; border:1px solid var(--border); border-radius:99px; width:100%; }
+  .sync-bar { display:flex; align-items:center; gap:8px; width:100%; margin-bottom:20px; padding:7px 12px; border-radius:99px;
+              border:1px solid var(--border); background:#fff; font-size:.7rem; font-weight:600; color:var(--text-muted); }
+  .sync-dot { width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex-shrink:0; }
+  .sync-bar.syncing { border-color:#c5d0e8; background:#f5f7ff; color:#4a5568; }
+  .sync-bar.syncing .sync-dot { background:#5b7cc4; animation:pulse 1s ease-in-out infinite; }
+  .sync-bar.ok { border-color:#b2dfdb; background:#f0fff4; color:#2e7d52; }
+  .sync-bar.ok .sync-dot { background:var(--success); }
+  .sync-bar.stale { border-color:#f0d9a0; background:#fffaf0; color:#8a6d1f; }
+  .sync-bar.stale .sync-dot { background:var(--amber); }
+  .sync-bar.offline { border-color:#f5c6c6; background:#fff5f5; color:var(--red); }
+  .sync-bar.offline .sync-dot { background:var(--red-light); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .sync-refresh { margin-left:auto; background:transparent; border:1px solid currentColor; color:inherit; border-radius:99px;
+                  padding:3px 10px; font-family:'Barlow Condensed',sans-serif; font-size:.68rem; font-weight:800;
+                  letter-spacing:.08em; text-transform:uppercase; cursor:pointer; }
+  .section-label { font-family:'Barlow Condensed',sans-serif; font-size:.68rem; font-weight:700; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--red-light); margin:0 0 8px 2px; }
+  .field-group { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+  .field { padding:13px 16px; border-bottom:1px solid var(--border); }
+  .field:last-child { border-bottom:none; }
+  .field:focus-within { background:#f5f7ff; }
+  .field label { display:block; font-size:.65rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+                 color:var(--text-muted); margin-bottom:5px; }
+  .req { color:var(--red-light); margin-left:2px; }
+  .field input, .field select, .field textarea { width:100%; background:transparent; border:none; outline:none; color:var(--text);
+                 font-family:'Barlow',sans-serif; font-size:1rem; font-weight:500; -webkit-appearance:none; appearance:none; }
+  .field textarea { resize:none; min-height:70px; font-size:.95rem; }
+  .field select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath fill='%235a6678' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+                  background-repeat:no-repeat; background-position:right 2px center; padding-right:18px; cursor:pointer; }
+  .field input::placeholder, .field textarea::placeholder { color:var(--text-muted); font-weight:400; }
+  .field-row { display:grid; grid-template-columns:1fr 1fr; }
+  .field-row .field { border-right:1px solid var(--border); border-bottom:none; }
+  .field-row .field:last-child { border-right:none; }
+  .check-row { display:flex; align-items:center; gap:10px; font-weight:600; font-size:.95rem; cursor:pointer; }
+  .check-row input { width:20px; height:20px; accent-color:var(--red); -webkit-appearance:auto; appearance:auto; flex-shrink:0; }
+  .hidden { display:none !important; }
+  .btn { width:100%; border:none; border-radius:var(--radius); padding:17px; font-family:'Barlow Condensed',sans-serif;
+         font-size:1.05rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; cursor:pointer;
+         display:flex; align-items:center; justify-content:center; gap:10px; transition:transform .1s, background .15s; }
+  .btn:active { transform:scale(.98); }
+  .btn:disabled { background:var(--border) !important; color:var(--text-muted) !important; cursor:not-allowed; }
+  .btn-start { background:var(--success); color:#fff; margin-top:4px; }
+  .btn-red { background:var(--red); color:#fff; }
+  .btn-ghost { background:transparent; color:var(--text-muted); border:1px dashed var(--border); padding:12px; font-size:.85rem; margin-top:12px; }
+  /* open jobs */
+  .job { background:#fff; border:1px solid var(--border); border-left:5px solid var(--amber); border-radius:var(--radius);
+         padding:14px 14px 12px; margin-bottom:10px; }
+  .job-top { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .job-unit { font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1; }
+  .job-timer { font-family:'Barlow Condensed',sans-serif; font-size:1.4rem; font-weight:800; color:var(--amber); }
+  .job-meta { font-size:.8rem; color:var(--text-muted); margin:6px 0 10px; line-height:1.4; }
+  .job-meta b { color:var(--text); font-weight:600; }
+  .job-btns { display:grid; grid-template-columns:1fr 2fr; gap:8px; }
+  .job-btns button { padding:12px; font-size:.9rem; }
+  .btn-cancel { background:#e8eaf0; color:var(--text); }
+  .unconfirmed { display:inline-block; margin-top:4px; font-size:.68rem; font-weight:700; color:#8a6d1f; background:#fffaf0;
+                 border:1px solid #f0d9a0; border-radius:6px; padding:2px 8px; }
+  .empty { font-size:.85rem; color:var(--text-muted); text-align:center; padding:14px; background:#fff;
+           border:1px dashed var(--border); border-radius:var(--radius); margin-bottom:18px; }
+  .status { display:none; border-radius:var(--radius); padding:13px 16px; margin-top:12px; font-size:.9rem; font-weight:600; }
+  .status.success { background:#f0fff4; border:1px solid #2ecc71; color:#1e8449; }
+  .status.error { background:#fff0f0; border:1px solid var(--red-light); color:var(--red); }
+  .note { font-size:.72rem; color:var(--text-muted); text-align:center; margin-top:18px; line-height:1.5; }
+  /* modal */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(20,25,40,.6); backdrop-filter:blur(3px); z-index:9998;
+                    display:none; align-items:center; justify-content:center; padding:16px; }
+  .modal-backdrop.visible { display:flex; }
+  .modal-card { width:100%; max-width:440px; background:#fff; border-radius:16px; padding:22px 18px 24px;
+                box-shadow:0 12px 40px rgba(0,0,0,.3); max-height:92vh; overflow-y:auto; }
+  .modal-title { font-family:'Barlow Condensed',sans-serif; font-size:1.5rem; font-weight:800; letter-spacing:.06em;
+                 text-transform:uppercase; text-align:center; margin-bottom:4px; }
+  .modal-sub { font-size:.85rem; color:var(--text-muted); text-align:center; margin-bottom:16px; }
+  .loc-line { border-radius:8px; padding:10px 12px; font-size:.8rem; font-weight:600; line-height:1.4; margin-bottom:14px;
+              background:#f5f7ff; border:1px solid #c5d0e8; color:#4a5568; }
+  .loc-line.ok { background:#f0fff4; border-color:#b2dfdb; color:#2e7d52; }
+  .loc-line.warn { background:#fffaf0; border-color:#f0d9a0; color:#8a6d1f; }
+  .summary-row { display:flex; justify-content:space-between; align-items:baseline; padding:10px 0; border-bottom:1px solid #e8eaf0; gap:12px; }
+  .summary-row:last-child { border-bottom:none; }
+  .summary-row .key { font-family:'Barlow Condensed',sans-serif; font-size:.7rem; font-weight:700; letter-spacing:.12em;
+                      text-transform:uppercase; color:var(--text-muted); flex-shrink:0; }
+  .summary-row .val { font-size:1rem; font-weight:600; text-align:right; word-break:break-word; }
+  .summary-row .val.big { font-family:'Barlow Condensed',sans-serif; font-size:1.4rem; font-weight:800; }
+  .modal-buttons { display:grid; grid-template-columns:1fr 1.4fr; gap:10px; margin-top:18px; }
+  .modal-buttons button { padding:16px; font-size:1rem; }
+  .btn-back { background:#e8eaf0; color:var(--text); }
+</style>
+</head>
+<body>
+
+<!-- CONFIRM (start / past job) -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal-card">
+    <div class="modal-title" id="cTitle">Start Job</div>
+    <div class="modal-sub" id="cSub">Check it before it goes to the sheet.</div>
+    <div class="loc-line" id="cLoc">📍 Getting location…</div>
+    <div id="cSummary"></div>
+    <div class="modal-buttons">
+      <button class="btn btn-back" type="button" onclick="closeModal('confirmModal')">← Back</button>
+      <button class="btn btn-start" id="cGo" type="button" onclick="confirmGo()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- FINISH JOB -->
+<div class="modal-backdrop" id="finishModal">
+  <div class="modal-card">
+    <div class="modal-title">Finish <span id="fUnit"></span></div>
+    <div class="modal-sub" id="fSub"></div>
+    <div class="loc-line" id="fLoc">📍 Getting location…</div>
+    <div class="field-group">
+      <div class="field"><label>Category <span class="req">*</span></label><select id="fCat"></select></div>
+      <div class="field"><label>Work Performed <span class="req">*</span></label>
+        <textarea id="fWork" placeholder="What was wrong, what you did…"></textarea></div>
+      <div class="field"><label>Odometer / Hour Meter</label>
+        <input id="fReading" inputmode="numeric" placeholder="Optional"></div>
+    </div>
+    <div class="field-group">
+      <div class="field"><label>Parts Used</label>
+        <textarea id="fParts" placeholder="Part #, description, qty (optional)"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Parts $</label><input id="fPartsCost" inputmode="decimal" placeholder="If known"></div>
+        <div class="field"><label>Outside Vendor $</label><input id="fVendorCost" inputmode="decimal" placeholder="Machine shop, tow…"></div>
+      </div>
+      <div class="field"><label>Receipt Photo</label>
+        <input type="file" id="fPhoto" accept="image/*" capture="environment" style="font-size:.85rem"></div>
+    </div>
+    <div class="field-group">
+      <div class="field"><label>Status <span class="req">*</span></label>
+        <select id="fStatus">
+          <option value="COMPLETE">Complete</option>
+          <option value="WAITING ON PARTS">Waiting on parts</option>
+          <option value="NEEDS FOLLOW-UP">Needs follow-up</option>
+        </select></div>
+    </div>
+    <div class="status error" id="fErr"></div>
+    <div class="modal-buttons">
+      <button class="btn btn-back" type="button" onclick="closeModal('finishModal')">← Back</button>
+      <button class="btn btn-red" id="fGo" type="button" onclick="finishGo()">Finish Job</button>
+    </div>
+  </div>
+</div>
+
+<div class="header">
+  <div class="wordmark">JCV38 <span>CORP</span></div>
+  <div class="header-sub">Mechanic Work Log · <span id="mechName" style="color:var(--red-light)">—</span></div>
+</div>
+
+<div class="card">
+  <div class="timestamp-badge" id="tsbadge">—</div>
+  <div class="sync-bar syncing" id="syncBar">
+    <span class="sync-dot"></span><span id="syncTxt">Loading…</span>
+    <button type="button" class="sync-refresh" onclick="sync(true)">Refresh</button>
+  </div>
+
+  <!-- OPEN JOBS -->
+  <div class="section-label">Jobs In Progress</div>
+  <div id="openList"></div>
+
+  <!-- START A JOB -->
+  <div class="section-label">Start a Job</div>
+  <div class="field-group">
+    <div class="field"><label>Unit <span class="req">*</span></label><select id="sUnit"></select></div>
+    <div class="field"><label>Category <span class="req">*</span></label><select id="sCat"></select></div>
+    <div class="field">
+      <label class="check-row"><input type="checkbox" id="sField" onchange="toggleField('s')"> Field repair (not at the shop)</label>
+      <input id="sFieldLoc" class="hidden" placeholder="Pad / lease / road — where?" style="margin-top:10px">
+    </div>
+  </div>
+  <button class="btn btn-start" id="startBtn" type="button" onclick="startJob()">▶ Start Job</button>
+
+  <button class="btn btn-ghost" type="button" onclick="toggleManual()" id="manualToggle">Forgot to start the timer? Log a past job</button>
+
+  <!-- PAST JOB -->
+  <div id="manualWrap" class="hidden" style="margin-top:16px">
+    <div class="section-label">Log a Past Job</div>
+    <div class="field-group">
+      <div class="field-row">
+        <div class="field"><label>Date <span class="req">*</span></label><input type="date" id="mDate"></div>
+        <div class="field"><label>Hours <span class="req">*</span></label><input id="mHours" inputmode="decimal" placeholder="e.g. 2.5"></div>
+      </div>
+      <div class="field"><label>Unit <span class="req">*</span></label><select id="mUnit"></select></div>
+      <div class="field"><label>Category <span class="req">*</span></label><select id="mCat"></select></div>
+      <div class="field"><label>Work Performed <span class="req">*</span></label>
+        <textarea id="mWork" placeholder="What was wrong, what you did…"></textarea></div>
+      <div class="field"><label>Odometer / Hour Meter</label><input id="mReading" inputmode="numeric" placeholder="Optional"></div>
+      <div class="field">
+        <label class="check-row"><input type="checkbox" id="mField" onchange="toggleField('m')"> Field repair (not at the shop)</label>
+        <input id="mFieldLoc" class="hidden" placeholder="Pad / lease / road — where?" style="margin-top:10px">
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field"><label>Parts Used</label><textarea id="mParts" placeholder="Optional"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Parts $</label><input id="mPartsCost" inputmode="decimal" placeholder="If known"></div>
+        <div class="field"><label>Outside Vendor $</label><input id="mVendorCost" inputmode="decimal" placeholder="Optional"></div>
+      </div>
+      <div class="field"><label>Receipt Photo</label><input type="file" id="mPhoto" accept="image/*" capture="environment" style="font-size:.85rem"></div>
+      <div class="field"><label>Status</label>
+        <select id="mStatus">
+          <option value="COMPLETE">Complete</option>
+          <option value="WAITING ON PARTS">Waiting on parts</option>
+          <option value="NEEDS FOLLOW-UP">Needs follow-up</option>
+        </select></div>
+    </div>
+    <button class="btn btn-red" type="button" onclick="manualJob()">Submit Past Job</button>
+  </div>
+
+  <div class="status success" id="okMsg"></div>
+  <div class="status error" id="errMsg"></div>
+
+  <div class="note">Location is recorded only when you tap Start or Finish,<br>as a record of where the work was done. Nothing runs in the background.</div>
+</div>
+
+<script>
+  // ─────────────────────────────────────────────────────────
+  //  JCV38 MECHANIC WORK LOG — v1.0
+  //  Same plumbing as the fuel form: JSONP for reads, no-cors POST for writes,
+  //  server clock is the only clock, nothing ever blocks a submission.
+  // ─────────────────────────────────────────────────────────
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyq3eO5psV9zCRvH7h8frkGqzSmOG1ICxDZbXQ6lTCV2s9Shp8eqbf-PwTbx_ucuLXCUg/exec";
+
+  const CACHE_KEY   = 'jcv38_mech_init_v1';     // offline fallback only
+  const PENDING_KEY = 'jcv38_mech_pending_v1';  // starts sent but not yet seen in the sheet
+  const STALE_MS    = 90 * 1000;
+
+  const FALLBACK = {
+    mechanic: 'Kyle',
+    shop: { lat: 48.2859191, lng: -103.6708521, radiusM: 250 },
+    categories: ['PM / Service','Brakes','Tires','Engine','Transmission / Driveline','Electrical',
+                 'Air System','Suspension','Body / Frame','DOT Inspection','Hydraulic / Pump','Other'],
+    units: [], open: []
+  };
+
+  let INIT = JSON.parse(JSON.stringify(FALLBACK));
+  let SRC = 'none', LAST_SYNC = 0, syncing = false;
+  let PENDING = load(PENDING_KEY) || {};   // jobId -> job
+  let DONE = {};                            // jobIds finished/cancelled this session
+  let pendingAction = null;                 // what the confirm modal will send
+  let finishJob = null, finishLoc = null;
+
+  // ── utils ──────────────────────────────────────────────
+  function $(id) { return document.getElementById(id); }
+  function load(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function normUnit(v) { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s.toUpperCase().replace(/\s+/g, ' '); }
+  function newId() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return 'J' + String(d.getFullYear()).slice(2) + p(d.getMonth()+1) + p(d.getDate()) + '-' +
+           p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+  }
+  function fmtTime(ms) { return ms ? new Date(ms).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : '—'; }
+  function elapsed(ms) {
+    if (!ms) return '—';
+    const m = Math.max(0, Math.floor((Date.now() - ms) / 60000));
+    return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+  }
+  function unitType(id) {
+    const u = INIT.units.find(x => normUnit(x.id) === normUnit(id));
+    return u ? u.type : '';
+  }
+  function showOk(msg) { $('errMsg').style.display = 'none'; $('okMsg').textContent = msg; $('okMsg').style.display = 'block';
+                         setTimeout(() => { $('okMsg').style.display = 'none'; }, 6000); }
+  function showErr(msg) { $('errMsg').textContent = msg; $('errMsg').style.display = 'block'; }
+  function closeModal(id) { $(id).classList.remove('visible'); }
+
+  // ── JSONP read (no CORS on a script tag) ───────────────
+  function jsonp(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const cb = 'jcv38m_' + Math.random().toString(36).slice(2);
+      const s = document.createElement('script'); let done = false;
+      const cleanup = () => { try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); };
+      const t = setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, timeoutMs || 15000);
+      window[cb] = data => { if (done) return; done = true; clearTimeout(t); cleanup(); resolve(data); };
+      s.onerror = () => { if (done) return; done = true; clearTimeout(t); cleanup(); reject(new Error('network')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb + '&_=' + Date.now();
+      document.head.appendChild(s);
+    });
+  }
+
+  // no-cors POST: we can't read the reply, so we re-sync afterwards to confirm.
+  async function post(payload) {
+    await fetch(APPS_SCRIPT_URL, { method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+  }
+
+  function setSync(state, text) { $('syncBar').className = 'sync-bar ' + state; $('syncTxt').textContent = text; }
+
+  async function sync(manual) {
+    if (syncing) return;
+    syncing = true;
+    setSync('syncing', manual ? 'Refreshing…' : 'Loading…');
+    try {
+      const res = await jsonp(APPS_SCRIPT_URL + '?action=init', 15000);
+      if (!res || res.ok !== true) throw new Error((res && res.error) || 'bad response');
+      INIT = { mechanic: res.mechanic || FALLBACK.mechanic, shop: res.shop || FALLBACK.shop,
+               categories: (res.categories && res.categories.length) ? res.categories : FALLBACK.categories,
+               units: res.units || [], open: res.open || [] };
+      SRC = 'server'; LAST_SYNC = Date.now();
+      save(CACHE_KEY, INIT);
+      // A pending start the sheet now shows is confirmed. A finished job the
+      // sheet no longer shows as open is done.
+      const openIds = new Set(INIT.open.map(j => j.jobId));
+      Object.keys(PENDING).forEach(id => { if (openIds.has(id)) delete PENDING[id]; });
+      Object.keys(DONE).forEach(id => { if (!openIds.has(id)) delete DONE[id]; });
+      save(PENDING_KEY, PENDING);
+      setSync('ok', 'Synced with sheet · ' + new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}));
+    } catch (err) {
+      if (SRC !== 'server') {
+        const c = load(CACHE_KEY);
+        if (c) { INIT = c; SRC = 'cache'; }
+      }
+      if (SRC === 'server') setSync('stale', 'Refresh failed — showing last synced data');
+      else if (SRC === 'cache') setSync('stale', 'Offline — showing saved list from this phone');
+      else setSync('offline', 'Offline — can’t reach the sheet');
+    } finally {
+      syncing = false;
+      renderAll();
+    }
+  }
+
+  // ── render ─────────────────────────────────────────────
+  function unitOptions(sel, keep) {
+    const prev = keep ? sel.value : '';
+    const groups = { Truck: [], Trailer: [], Shop: [] };
+    INIT.units.forEach(u => { (groups[u.type] || (groups[u.type] = [])).push(u.id); });
+    let html = '<option value="">— Select unit —</option>';
+    [['Truck','Trucks'], ['Trailer','Trailers'], ['Shop','Shop']].concat(
+      Object.keys(groups).filter(k => !['Truck','Trailer','Shop'].includes(k)).map(k => [k, k])
+    ).forEach(([k, label]) => {
+      if (!groups[k] || !groups[k].length) return;
+      html += '<optgroup label="' + esc(label) + '">' + groups[k].map(id => '<option>' + esc(id) + '</option>').join('') + '</optgroup>';
+    });
+    sel.innerHTML = html;
+    if (prev) sel.value = prev;
+  }
+  function catOptions(sel, keep) {
+    const prev = keep ? sel.value : '';
+    sel.innerHTML = '<option value="">— Select category —</option>' + INIT.categories.map(c => '<option>' + esc(c) + '</option>').join('');
+    if (prev) sel.value = prev;
+  }
+
+  function openJobs() {
+    const list = INIT.open.filter(j => !DONE[j.jobId]).map(j => Object.assign({}, j));
+    const ids = new Set(list.map(j => j.jobId));
+    Object.values(PENDING).forEach(p => { if (!ids.has(p.jobId) && !DONE[p.jobId]) list.push(Object.assign({ unconfirmed: true }, p)); });
+    return list.sort((a, b) => (a.start || 0) - (b.start || 0));
+  }
+
+  function renderOpen() {
+    const jobs = openJobs();
+    if (!jobs.length) { $('openList').innerHTML = '<div class="empty">No jobs running.</div>'; return; }
+    $('openList').innerHTML = jobs.map(j =>
+      '<div class="job">' +
+        '<div class="job-top"><div class="job-unit">' + esc(j.unit) + '</div><div class="job-timer">' + elapsed(j.start) + '</div></div>' +
+        '<div class="job-meta"><b>' + esc(j.category) + '</b> · started ' + fmtTime(j.start) +
+          (j.startZone ? ' · ' + esc(j.startZone) : '') + (j.fieldLoc ? '<br>Field: ' + esc(j.fieldLoc) : '') +
+          (j.unconfirmed ? '<br><span class="unconfirmed">Not seen in the sheet yet — it will be fixed when you finish</span>' : '') +
+        '</div>' +
+        '<div class="job-btns">' +
+          '<button class="btn btn-cancel" type="button" onclick="cancelJob(\'' + esc(j.jobId) + '\')">Cancel</button>' +
+          '<button class="btn btn-red" type="button" onclick="openFinish(\'' + esc(j.jobId) + '\')">■ Finish</button>' +
+        '</div>' +
+      '</div>').join('');
+  }
+
+  function renderAll() {
+    $('mechName').textContent = INIT.mechanic || '—';
+    unitOptions($('sUnit'), true); unitOptions($('mUnit'), true);
+    catOptions($('sCat'), true);   catOptions($('mCat'), true);
+    renderOpen();
+  }
+
+  function toggleField(p) { $(p + 'FieldLoc').classList.toggle('hidden', !$(p + 'Field').checked); }
+  function toggleManual() {
+    const w = $('manualWrap'), open = w.classList.contains('hidden');
+    w.classList.toggle('hidden', !open);
+    $('manualToggle').textContent = open ? 'Hide past job form' : 'Forgot to start the timer? Log a past job';
+    if (open && !$('mDate').value) {
+      const d = new Date(); $('mDate').value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+  }
+
+  // ── location (a stamp at Start / Finish, never tracking) ──
+  function getLoc() {
+    return new Promise(resolve => {
+      if (!('geolocation' in navigator)) return resolve({ err: 'not supported' });
+      let done = false;
+      const t = setTimeout(() => { if (!done) { done = true; resolve({ err: 'timeout' }); } }, 15000);
+      navigator.geolocation.getCurrentPosition(
+        p => { if (done) return; done = true; clearTimeout(t);
+               resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }); },
+        e => { if (done) return; done = true; clearTimeout(t);
+               resolve({ err: e.code === 1 ? 'permission denied' : e.code === 2 ? 'unavailable' : 'timeout' }); },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+    });
+  }
+  function distM(a, b, c, d) {
+    const R = 6371000, r = Math.PI / 180, dLat = (c - a) * r, dLng = (d - b) * r;
+    const x = Math.sin(dLat/2)**2 + Math.cos(a*r) * Math.cos(c*r) * Math.sin(dLng/2)**2;
+    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+  // Mirrors zone_() in the script. The server's answer is the one that's recorded.
+  function describeLoc(loc, isField) {
+    if (!loc || loc.err) return { cls: 'warn', txt: '⚠️ No location (' + ((loc && loc.err) || 'unknown') + '). It will still be recorded, just flagged.' };
+    const s = INIT.shop, dm = distM(loc.lat, loc.lng, s.lat, s.lng), mi = (dm / 1609.344).toFixed(1);
+    if (dm <= s.radiusM) return { cls: 'ok', txt: '📍 At the shop' };
+    if (loc.acc > 500) return { cls: 'warn', txt: '⚠️ Weak GPS (±' + loc.acc + ' m) — about ' + mi + ' mi from shop' };
+    if (dm - loc.acc <= s.radiusM) return { cls: 'ok', txt: '📍 At the shop (edge of the yard)' };
+    return { cls: isField ? 'ok' : 'warn', txt: (isField ? '📍 Field repair — ' : '📍 Outside the shop — ') + mi + ' mi away' };
+  }
+  function setLocLine(el, loc, isField) {
+    if (loc === null) { el.className = 'loc-line'; el.textContent = '📍 Getting location…'; return; }
+    const d = describeLoc(loc, isField); el.className = 'loc-line ' + d.cls; el.textContent = d.txt;
+  }
+
+  // ── photo: shrink before upload so it goes through on one bar of signal ──
+  function readPhoto(input) {
+    const f = input.files && input.files[0];
+    if (!f) return Promise.resolve(null);
+    return new Promise(resolve => {
+      const img = new Image(), url = URL.createObjectURL(f);
+      img.onload = () => {
+        const s = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve({ b64: c.toDataURL('image/jpeg', 0.72).split(',')[1], mime: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+
+  function row(k, v, big) { return '<div class="summary-row"><div class="key">' + k + '</div><div class="val' + (big ? ' big' : '') + '">' + esc(v) + '</div></div>'; }
+
+  // ── START ──────────────────────────────────────────────
+  async function startJob() {
+    const unit = $('sUnit').value, cat = $('sCat').value, field = $('sField').checked;
+    if (!unit || !cat) return showErr('Pick a unit and a category.');
+    $('errMsg').style.display = 'none';
+    const open = openJobs();
+    const same = open.find(j => normUnit(j.unit) === normUnit(unit));
+    pendingAction = { action: 'start', jobId: newId(), unit, unitType: unitType(unit), category: cat,
+                      field, fieldLoc: field ? $('sFieldLoc').value.trim() : '', loc: null };
+    $('cTitle').textContent = 'Start Job';
+    $('cSub').textContent = same ? '⚠️ ' + unit + ' already has a job running. Start another anyway?'
+                          : (open.length ? 'Heads up: ' + open.length + ' other job(s) still running.' : 'Timer starts when you confirm.');
+    $('cSummary').innerHTML = row('Unit', unit, true) + row('Category', cat) + (field ? row('Field', pendingAction.fieldLoc || '—') : '');
+    await askLocation();
+  }
+
+  // ── PAST JOB ───────────────────────────────────────────
+  async function manualJob() {
+    const unit = $('mUnit').value, cat = $('mCat').value, hours = $('mHours').value.trim(), work = $('mWork').value.trim();
+    if (!$('mDate').value || !unit || !cat || !hours || !work) return showErr('Past job needs date, hours, unit, category and work performed.');
+    if (!(Number(hours) > 0) || Number(hours) > 24) return showErr('Hours must be between 0 and 24.');
+    $('errMsg').style.display = 'none';
+    const field = $('mField').checked;
+    pendingAction = { action: 'manual', jobId: newId(), workDate: $('mDate').value, hours, unit, unitType: unitType(unit),
+                      category: cat, work, reading: $('mReading').value.trim(), parts: $('mParts').value.trim(),
+                      partsCost: $('mPartsCost').value.trim(), vendorCost: $('mVendorCost').value.trim(),
+                      status: $('mStatus').value, field, fieldLoc: field ? $('mFieldLoc').value.trim() : '',
+                      loc: null, _photo: $('mPhoto') };
+    $('cTitle').textContent = 'Log Past Job';
+    $('cSub').textContent = 'Typed hours are marked as not timed on the sheet.';
+    $('cSummary').innerHTML = row('Date', $('mDate').value) + row('Hours', hours, true) + row('Unit', unit, true) +
+                              row('Category', cat) + row('Work', work);
+    await askLocation();
+  }
+
+  async function askLocation() {
+    const btn = $('cGo');
+    btn.disabled = true; btn.textContent = 'Getting location…';
+    setLocLine($('cLoc'), null);
+    $('confirmModal').classList.add('visible');
+    const loc = await getLoc();
+    if (!pendingAction) return;
+    pendingAction.loc = loc.err ? { err: loc.err } : loc;
+    setLocLine($('cLoc'), loc, pendingAction.field);
+    btn.disabled = false; btn.textContent = pendingAction.action === 'start' ? '▶ Start' : 'Submit';
+  }
+
+  async function confirmGo() {
+    const a = pendingAction; if (!a) return;
+    const btn = $('cGo'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const payload = Object.assign({}, a); delete payload._photo;
+      if (a._photo) payload.receipt = await readPhoto(a._photo);
+      await post(payload);
+      if (a.action === 'start') {
+        PENDING[a.jobId] = { jobId: a.jobId, unit: a.unit, unitType: a.unitType, category: a.category,
+                             start: Date.now(), fieldLoc: a.fieldLoc, field: a.field,
+                             startZone: describeLoc(a.loc, a.field).txt.replace(/^\S+\s/, '') };
+        save(PENDING_KEY, PENDING);
+        $('sUnit').value = ''; $('sCat').value = ''; $('sField').checked = false; $('sFieldLoc').value = ''; toggleField('s');
+        showOk('Started ' + a.unit + '. Tap Finish when you’re done.');
+      } else {
+        ['mHours','mWork','mReading','mParts','mPartsCost','mVendorCost','mFieldLoc'].forEach(id => $(id).value = '');
+        $('mUnit').value = ''; $('mCat').value = ''; $('mField').checked = false; $('mPhoto').value = ''; toggleField('m');
+        toggleManual();
+        showOk('Past job logged for ' + a.unit + '.');
+      }
+      pendingAction = null;
+      closeModal('confirmModal');
+      renderOpen();
+      setTimeout(() => sync(false), 3000);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Retry';
+      showErr('No connection — nothing was sent. Tap Retry.');
+    }
+  }
+
+  // ── FINISH ─────────────────────────────────────────────
+  async function openFinish(jobId) {
+    const j = openJobs().find(x => x.jobId === jobId); if (!j) return;
+    finishJob = j; finishLoc = null;
+    $('fUnit').textContent = j.unit;
+    $('fSub').textContent = 'Started ' + fmtTime(j.start) + ' · ' + elapsed(j.start) + ' so far';
+    catOptions($('fCat'), false); $('fCat').value = j.category || '';
+    ['fWork','fReading','fParts','fPartsCost','fVendorCost'].forEach(id => $(id).value = '');
+    $('fPhoto').value = ''; $('fStatus').value = 'COMPLETE'; $('fErr').style.display = 'none';
+    const btn = $('fGo'); btn.disabled = true; btn.textContent = 'Getting location…';
+    setLocLine($('fLoc'), null);
+    $('finishModal').classList.add('visible');
+    const loc = await getLoc();
+    if (!finishJob || finishJob.jobId !== jobId) return;
+    finishLoc = loc.err ? { err: loc.err } : loc;
+    setLocLine($('fLoc'), loc, !!j.fieldLoc || !!j.field);
+    btn.disabled = false; btn.textContent = '■ Finish Job';
+  }
+
+  async function finishGo() {
+    const j = finishJob; if (!j) return;
+    const work = $('fWork').value.trim();
+    if (!work || !$('fCat').value) { $('fErr').textContent = 'Category and work performed are required.'; $('fErr').style.display = 'block'; return; }
+    const btn = $('fGo'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const payload = { action: 'finish', jobId: j.jobId, unit: j.unit, unitType: j.unitType || unitType(j.unit),
+                        category: $('fCat').value, startMs: j.start, field: !!j.field, fieldLoc: j.fieldLoc || '',
+                        status: $('fStatus').value, work, reading: $('fReading').value.trim(), parts: $('fParts').value.trim(),
+                        partsCost: $('fPartsCost').value.trim(), vendorCost: $('fVendorCost').value.trim(),
+                        loc: finishLoc, receipt: await readPhoto($('fPhoto')) };
+      await post(payload);
+      DONE[j.jobId] = true; delete PENDING[j.jobId]; save(PENDING_KEY, PENDING);
+      finishJob = null;
+      closeModal('finishModal');
+      renderOpen();
+      showOk('Finished ' + j.unit + ' · ' + elapsed(j.start) + '.');
+      setTimeout(() => sync(false), 3000);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Retry';
+      $('fErr').textContent = 'No connection — nothing was sent. Tap Retry.'; $('fErr').style.display = 'block';
+    }
+  }
+
+  async function cancelJob(jobId) {
+    const j = openJobs().find(x => x.jobId === jobId); if (!j) return;
+    if (!window.confirm('Cancel the ' + j.unit + ' job? Use this only if it was started by mistake.')) return;
+    try {
+      await post({ action: 'cancel', jobId });
+      DONE[jobId] = true; delete PENDING[jobId]; save(PENDING_KEY, PENDING);
+      renderOpen(); showOk('Cancelled ' + j.unit + '.');
+      setTimeout(() => sync(false), 3000);
+    } catch (err) { showErr('No connection — cancel not sent.'); }
+  }
+
+  // ── clock + boot ───────────────────────────────────────
+  function tick() {
+    const n = new Date();
+    $('tsbadge').textContent = n.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'}) +
+                               '  ·  ' + n.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+    renderOpen();
+  }
+  (function boot() {
+    const c = load(CACHE_KEY); if (c) { INIT = c; SRC = 'cache'; }
+    renderAll(); tick(); setInterval(tick, 30000);
+    sync(false);
+  })();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - LAST_SYNC > STALE_MS) sync(false); });
+  window.addEventListener('online', () => sync(false));
+</script>
+</body>
+</html>
