@@ -87,6 +87,16 @@
   .status.success { background:#f0fff4; border:1px solid #2ecc71; color:#1e8449; }
   .status.error { background:#fff0f0; border:1px solid var(--red-light); color:var(--red); }
   .note { font-size:.72rem; color:var(--text-muted); text-align:center; margin-top:18px; line-height:1.5; }
+  /* unit history */
+  .hist-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; }
+  .hist-label { font-family:'Barlow Condensed',sans-serif; font-size:.62rem; font-weight:800; letter-spacing:.14em;
+                text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; }
+  .hist-item { padding:8px 0; border-top:1px solid #eef0f4; }
+  .hist-item:first-of-type { border-top:none; padding-top:0; }
+  .hist-head { font-size:.85rem; }
+  .hist-problem { font-size:.85rem; color:var(--red); font-style:italic; margin-top:3px; }
+  .hist-work { font-size:.85rem; margin-top:3px; line-height:1.35; }
+  .hist-dim { font-size:.75rem; color:var(--text-muted); font-weight:500; margin-top:2px; }
   /* modal */
   .modal-backdrop { position:fixed; inset:0; background:rgba(20,25,40,.6); backdrop-filter:blur(3px); z-index:9998;
                     display:none; align-items:center; justify-content:center; padding:16px; }
@@ -168,7 +178,7 @@
 
 <div class="header">
   <div class="wordmark">JCV38 <span>CORP</span></div>
-  <div class="header-sub">Mechanic Work Log · <span id="mechName" style="color:var(--red-light)">—</span></div>
+  <div class="header-sub"><span id="subTitle">Mechanic Work Log</span> · <span id="mechName" style="color:var(--red-light)">—</span></div>
 </div>
 
 <div class="card">
@@ -179,18 +189,27 @@
   </div>
 
   <!-- OPEN JOBS -->
-  <div class="section-label">Jobs In Progress</div>
+  <div class="section-label" id="lblOpenJobs">Jobs In Progress</div>
   <div id="openList"></div>
 
   <!-- START A JOB -->
-  <div class="section-label">Start a Job</div>
+  <div class="section-label" id="lblStartSection">Start a Job</div>
   <div class="field-group">
-    <div class="field"><label>Unit <span class="req">*</span></label><select id="sUnit"></select></div>
-    <div class="field"><label>Category <span class="req">*</span></label><select id="sCat"></select></div>
+    <div class="field"><label id="lblMech">Mechanic <span class="req">*</span></label><select id="sMech" onchange="rememberMech()"></select></div>
+    <div class="field"><label id="lblUnit">Unit <span class="req">*</span></label><select id="sUnit" onchange="onUnitPicked()"></select></div>
+    <div class="field"><label id="lblCat">Category <span class="req">*</span></label><select id="sCat" onchange="renderHistory()"></select></div>
+    <div class="field"><label id="lblProblem">What is it doing?</label>
+      <textarea id="sProblem" placeholder="Hard starting, volt gauge spiking, air leak at the tank…"></textarea></div>
     <div class="field">
-      <label class="check-row"><input type="checkbox" id="sField" onchange="toggleField('s')"> Field repair (not at the shop)</label>
+      <label class="check-row"><input type="checkbox" id="sField" onchange="toggleField('s')"> <span id="lblField">Field repair (not at the shop)</span></label>
       <input id="sFieldLoc" class="hidden" placeholder="Pad / lease / road — where?" style="margin-top:10px">
     </div>
+  </div>
+
+  <!-- UNIT HISTORY (fills in when a unit is picked) -->
+  <div id="histWrap" class="hidden">
+    <div class="section-label" id="lblHistory">This Unit's History</div>
+    <div id="histBody"></div>
   </div>
   <button class="btn btn-start" id="startBtn" type="button" onclick="startJob()">▶ Start Job</button>
 
@@ -204,10 +223,13 @@
         <div class="field"><label>Date <span class="req">*</span></label><input type="date" id="mDate"></div>
         <div class="field"><label>Hours <span class="req">*</span></label><input id="mHours" inputmode="decimal" placeholder="e.g. 2.5"></div>
       </div>
+      <div class="field"><label>Performed by <span class="req">*</span></label><select id="mMech"></select></div>
       <div class="field"><label>Unit <span class="req">*</span></label><select id="mUnit"></select></div>
       <div class="field"><label>Category <span class="req">*</span></label><select id="mCat"></select></div>
+      <div class="field"><label>What was it doing?</label>
+        <textarea id="mProblem" placeholder="The complaint — what sent you to it"></textarea></div>
       <div class="field"><label>Work Performed <span class="req">*</span></label>
-        <textarea id="mWork" placeholder="What was wrong, what you did…"></textarea></div>
+        <textarea id="mWork" placeholder="What you actually did"></textarea></div>
       <div class="field"><label>Odometer / Hour Meter</label><input id="mReading" inputmode="numeric" placeholder="Optional"></div>
       <div class="field">
         <label class="check-row"><input type="checkbox" id="mField" onchange="toggleField('m')"> Field repair (not at the shop)</label>
@@ -234,26 +256,71 @@
   <div class="status success" id="okMsg"></div>
   <div class="status error" id="errMsg"></div>
 
-  <div class="note">Location is recorded only when you tap Start or Finish,<br>as a record of where the work was done. Nothing runs in the background.</div>
+  <div class="note" id="footNote">Location is recorded only when you tap Start or Finish, as a record of where the work was done. Nothing runs in the background.</div>
 </div>
 
 <script>
-  // ─────────────────────────────────────────────────────────
-  //  JCV38 MECHANIC WORK LOG — v1.0
-  //  Same plumbing as the fuel form: JSONP for reads, no-cors POST for writes,
-  //  server clock is the only clock, nothing ever blocks a submission.
-  // ─────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════════════
+     ██  EDIT ME — everything John normally changes is in this block.  ██
+     ═══════════════════════════════════════════════════════════════════
+
+     NOT HERE — these live in the spreadsheet, so you never touch this file:
+       · Who can log work ....... "People" tab (Name | Role | Active | Rate)
+                                  mechanics AND drivers go here
+       · Trucks & trailers ...... "Units" tab      (Unit ID + Type + Active)
+       · Repair categories ...... "Settings" tab, column D
+       · Hourly rate ............ "People" tab, per person. Blank = hours
+                                  logged with no labor cost (drivers).
+                                  Settings B3 is the fallback rate.
+       · Shop location/radius ... "Settings" tab, Shop Lat / Lng / Radius
+     Add a row there, tap Refresh in the app, and the dropdown updates.
+     Uncheck Active instead of deleting — that keeps the old history intact.
+
+     HERE — wording only. Change the text between the quotes. Keep the quotes
+     and the comma. If the app ever goes blank after an edit, you dropped one.
+     To publish: GitHub repo > index.html > pencil icon > paste > Commit.
+     The page updates about a minute later.
+  ═════════════════════════════════════════════════════════════════════ */
+
+  const TEXT = {
+    subtitle:     "Mechanic Work Log",        // under the JCV38 CORP wordmark
+    openJobs:     "Jobs In Progress",
+    noJobs:       "No jobs running.",
+    startSection: "Start a Job",
+    mechanic:     "Performed by",       // who did the work — mechanic or driver
+    unit:         "Unit",
+    category:     "Category",
+    problem:      "What is it doing?",        // the complaint, before work starts
+    problemHint:  "Hard starting, volt gauge spiking, air leak at the tank…",
+    fieldRepair:  "Field repair (not at the shop)",
+    history:      "This Unit's History",
+    startBtn:     "▶ Start Job",
+    pastJobBtn:   "Forgot to start the timer? Log a past job",
+    footNote:     "Location is recorded only when you tap Start or Finish, as a record of where the work was done. Nothing runs in the background."
+  };
+
+  // How many past jobs to list under a unit. Raise it if you want more history.
+  const HISTORY_SHOWN = 5;
+
+  /* ═══════════ END OF THE EDIT-ME BLOCK ═══════════
+     Below here is the machinery. Changing it can break submissions.
+     ─────────────────────────────────────────────────────────
+     JCV38 MECHANIC WORK LOG — v1.2
+     Same plumbing as the fuel form: JSONP for reads, no-cors POST for writes,
+     server clock is the only clock, nothing ever blocks a submission.
+     ───────────────────────────────────────────────────────── */
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyq3eO5psV9zCRvH7h8frkGqzSmOG1ICxDZbXQ6lTCV2s9Shp8eqbf-PwTbx_ucuLXCUg/exec";
 
   const CACHE_KEY   = 'jcv38_mech_init_v1';     // offline fallback only
   const PENDING_KEY = 'jcv38_mech_pending_v1';  // starts sent but not yet seen in the sheet
+  const MECH_KEY    = 'jcv38_mech_who_v1';      // remembers who this phone belongs to
   const STALE_MS    = 90 * 1000;
 
   const FALLBACK = {
-    mechanic: 'Kyle',
+    mechanics: [],
     shop: { lat: 48.2859191, lng: -103.6708521, radiusM: 250 },
     categories: ['PM / Service','Brakes','Tires','Engine','Transmission / Driveline','Electrical',
-                 'Air System','Suspension','Body / Frame','DOT Inspection','Hydraulic / Pump','Other'],
+                 'Air System','Suspension','Body / Frame','Hydraulic / Pump','Other'],
     units: [], open: []
   };
 
@@ -263,6 +330,7 @@
   let DONE = {};                            // jobIds finished/cancelled this session
   let pendingAction = null;                 // what the confirm modal will send
   let finishJob = null, finishLoc = null;
+  let HIST = { unit: '', jobs: [], state: 'idle' };   // history for the picked unit
 
   // ── utils ──────────────────────────────────────────────
   function $(id) { return document.getElementById(id); }
@@ -319,7 +387,10 @@
     try {
       const res = await jsonp(APPS_SCRIPT_URL + '?action=init', 15000);
       if (!res || res.ok !== true) throw new Error((res && res.error) || 'bad response');
-      INIT = { mechanic: res.mechanic || FALLBACK.mechanic, shop: res.shop || FALLBACK.shop,
+      INIT = { mechanics: (res.people && res.people.length) ? res.people
+                          : (res.mechanics && res.mechanics.length) ? res.mechanics
+                          : (res.mechanic ? [res.mechanic] : FALLBACK.mechanics),
+               shop: res.shop || FALLBACK.shop,
                categories: (res.categories && res.categories.length) ? res.categories : FALLBACK.categories,
                units: res.units || [], open: res.open || [] };
       SRC = 'server'; LAST_SYNC = Date.now();
@@ -366,6 +437,78 @@
     if (prev) sel.value = prev;
   }
 
+  function mechOptions(sel, keep) {
+    const prev = keep ? sel.value : '';
+    sel.innerHTML = '<option value="">— Select name —</option>' +
+      INIT.mechanics.map(m => '<option>' + esc(m) + '</option>').join('');
+    const remembered = load(MECH_KEY);
+    if (prev && INIT.mechanics.includes(prev)) sel.value = prev;
+    else if (remembered && INIT.mechanics.includes(remembered)) sel.value = remembered;
+    else if (INIT.mechanics.length === 1) sel.value = INIT.mechanics[0];
+  }
+  // One phone, one mechanic, nearly always — so remember the pick.
+  function rememberMech() {
+    const v = $('sMech').value;
+    if (v) { save(MECH_KEY, v); $('mMech').value = v; }
+    $('mechName').textContent = v || '—';
+  }
+
+  // ── unit history ───────────────────────────────────────
+  function onUnitPicked() {
+    const unit = $('sUnit').value;
+    HIST = { unit, jobs: [], state: unit ? 'loading' : 'idle' };
+    renderHistory();
+    if (!unit) return;
+    jsonp(APPS_SCRIPT_URL + '?action=history&unit=' + encodeURIComponent(unit), 15000)
+      .then(res => {
+        if ($('sUnit').value !== unit) return;          // he moved on already
+        if (!res || res.ok !== true) throw new Error('bad response');
+        HIST = { unit, jobs: res.jobs || [], state: 'ok' };
+        renderHistory();
+      })
+      .catch(() => {
+        if ($('sUnit').value !== unit) return;
+        HIST = { unit, jobs: [], state: 'error' };
+        renderHistory();
+      });
+  }
+
+  function jobLine(j) {
+    const bits = [];
+    if (j.hours != null) bits.push(j.hours + ' h');
+    if (j.mech) bits.push(esc(j.mech));
+    if (j.status && j.status !== 'COMPLETE') bits.push(esc(j.status));
+    return '<div class="hist-item">' +
+      '<div class="hist-head"><b>' + esc(j.date) + '</b> · ' + esc(j.category) +
+        (bits.length ? ' <span class="hist-dim">· ' + bits.join(' · ') + '</span>' : '') + '</div>' +
+      (j.problem ? '<div class="hist-problem">“' + esc(j.problem) + '”</div>' : '') +
+      (j.work ? '<div class="hist-work">' + esc(j.work) + '</div>' : '') +
+      (j.parts ? '<div class="hist-dim">Parts: ' + esc(j.parts) + '</div>' : '') +
+    '</div>';
+  }
+
+  function renderHistory() {
+    const wrap = $('histWrap'), body = $('histBody');
+    if (HIST.state === 'idle') { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    if (HIST.state === 'loading') { body.innerHTML = '<div class="empty">Looking up ' + esc(HIST.unit) + '…</div>'; return; }
+    if (HIST.state === 'error')   { body.innerHTML = '<div class="empty">Couldn’t load history — you can still start the job.</div>'; return; }
+    if (!HIST.jobs.length)        { body.innerHTML = '<div class="empty">No repairs logged on ' + esc(HIST.unit) + ' yet.</div>'; return; }
+
+    const last = HIST.jobs[0];
+    const cat = $('sCat').value;
+    const inCat = HIST.jobs.filter(j => j.category === cat && j !== last).slice(0, HISTORY_SHOWN);
+
+    let html = '<div class="hist-card"><div class="hist-label">Last logged</div>' + jobLine(last) + '</div>';
+    if (cat) {
+      html += '<div class="hist-card"><div class="hist-label">Other ' + esc(cat) + ' work on ' + esc(HIST.unit) + '</div>' +
+        (inCat.length ? inCat.map(jobLine).join('')
+                      : '<div class="hist-dim" style="padding:2px 0 2px">Nothing else logged under ' + esc(cat) + '.</div>') +
+        '</div>';
+    }
+    body.innerHTML = html;
+  }
+
   function openJobs() {
     const list = INIT.open.filter(j => !DONE[j.jobId]).map(j => Object.assign({}, j));
     const ids = new Set(list.map(j => j.jobId));
@@ -375,12 +518,14 @@
 
   function renderOpen() {
     const jobs = openJobs();
-    if (!jobs.length) { $('openList').innerHTML = '<div class="empty">No jobs running.</div>'; return; }
+    if (!jobs.length) { $('openList').innerHTML = '<div class="empty">' + esc(TEXT.noJobs) + '</div>'; return; }
     $('openList').innerHTML = jobs.map(j =>
       '<div class="job">' +
         '<div class="job-top"><div class="job-unit">' + esc(j.unit) + '</div><div class="job-timer">' + elapsed(j.start) + '</div></div>' +
         '<div class="job-meta"><b>' + esc(j.category) + '</b> · started ' + fmtTime(j.start) +
+          (j.mech ? ' · ' + esc(j.mech) : '') +
           (j.startZone ? ' · ' + esc(j.startZone) : '') + (j.fieldLoc ? '<br>Field: ' + esc(j.fieldLoc) : '') +
+          (j.problem ? '<br>“' + esc(j.problem) + '”' : '') +
           (j.unconfirmed ? '<br><span class="unconfirmed">Not seen in the sheet yet — it will be fixed when you finish</span>' : '') +
         '</div>' +
         '<div class="job-btns">' +
@@ -391,17 +536,37 @@
   }
 
   function renderAll() {
-    $('mechName').textContent = INIT.mechanic || '—';
+    mechOptions($('sMech'), true); mechOptions($('mMech'), true);
+    $('mechName').textContent = $('sMech').value || '—';
     unitOptions($('sUnit'), true); unitOptions($('mUnit'), true);
     catOptions($('sCat'), true);   catOptions($('mCat'), true);
+    applyText();
     renderOpen();
+    renderHistory();
+  }
+
+  // Wording from the EDIT ME block at the top of this file.
+  function applyText() {
+    $('subTitle').textContent = TEXT.subtitle;
+    $('lblOpenJobs').textContent = TEXT.openJobs;
+    $('lblStartSection').textContent = TEXT.startSection;
+    $('lblMech').innerHTML = esc(TEXT.mechanic) + ' <span class="req">*</span>';
+    $('lblUnit').innerHTML = esc(TEXT.unit) + ' <span class="req">*</span>';
+    $('lblCat').innerHTML = esc(TEXT.category) + ' <span class="req">*</span>';
+    $('lblProblem').textContent = TEXT.problem;
+    $('sProblem').placeholder = TEXT.problemHint;
+    $('lblField').textContent = TEXT.fieldRepair;
+    $('lblHistory').textContent = TEXT.history;
+    $('startBtn').textContent = TEXT.startBtn;
+    $('footNote').textContent = TEXT.footNote;
+    if ($('manualWrap').classList.contains('hidden')) $('manualToggle').textContent = TEXT.pastJobBtn;
   }
 
   function toggleField(p) { $(p + 'FieldLoc').classList.toggle('hidden', !$(p + 'Field').checked); }
   function toggleManual() {
     const w = $('manualWrap'), open = w.classList.contains('hidden');
     w.classList.toggle('hidden', !open);
-    $('manualToggle').textContent = open ? 'Hide past job form' : 'Forgot to start the timer? Log a past job';
+    $('manualToggle').textContent = open ? 'Hide past job form' : TEXT.pastJobBtn;
     if (open && !$('mDate').value) {
       const d = new Date(); $('mDate').value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
@@ -464,28 +629,35 @@
   // ── START ──────────────────────────────────────────────
   async function startJob() {
     const unit = $('sUnit').value, cat = $('sCat').value, field = $('sField').checked;
+    const mech = $('sMech').value, problem = $('sProblem').value.trim();
+    if (!mech) return showErr('Pick your name first.');
     if (!unit || !cat) return showErr('Pick a unit and a category.');
     $('errMsg').style.display = 'none';
     const open = openJobs();
     const same = open.find(j => normUnit(j.unit) === normUnit(unit));
-    pendingAction = { action: 'start', jobId: newId(), unit, unitType: unitType(unit), category: cat,
-                      field, fieldLoc: field ? $('sFieldLoc').value.trim() : '', loc: null };
+    pendingAction = { action: 'start', jobId: newId(), mechanic: mech, unit, unitType: unitType(unit), category: cat,
+                      problem, field, fieldLoc: field ? $('sFieldLoc').value.trim() : '', loc: null };
     $('cTitle').textContent = 'Start Job';
     $('cSub').textContent = same ? '⚠️ ' + unit + ' already has a job running. Start another anyway?'
                           : (open.length ? 'Heads up: ' + open.length + ' other job(s) still running.' : 'Timer starts when you confirm.');
-    $('cSummary').innerHTML = row('Unit', unit, true) + row('Category', cat) + (field ? row('Field', pendingAction.fieldLoc || '—') : '');
+    $('cSummary').innerHTML = row('Unit', unit, true) + row('Category', cat) + row('Performed by', mech) +
+                              (problem ? row('Complaint', problem) : '') +
+                              (field ? row('Field', pendingAction.fieldLoc || '—') : '');
     await askLocation();
   }
 
   // ── PAST JOB ───────────────────────────────────────────
   async function manualJob() {
     const unit = $('mUnit').value, cat = $('mCat').value, hours = $('mHours').value.trim(), work = $('mWork').value.trim();
+    const mech = $('mMech').value;
+    if (!mech) return showErr('Pick who did the work.');
     if (!$('mDate').value || !unit || !cat || !hours || !work) return showErr('Past job needs date, hours, unit, category and work performed.');
     if (!(Number(hours) > 0) || Number(hours) > 24) return showErr('Hours must be between 0 and 24.');
     $('errMsg').style.display = 'none';
     const field = $('mField').checked;
-    pendingAction = { action: 'manual', jobId: newId(), workDate: $('mDate').value, hours, unit, unitType: unitType(unit),
-                      category: cat, work, reading: $('mReading').value.trim(), parts: $('mParts').value.trim(),
+    pendingAction = { action: 'manual', jobId: newId(), mechanic: mech, workDate: $('mDate').value, hours, unit, unitType: unitType(unit),
+                      category: cat, work, problem: $('mProblem').value.trim(),
+                      reading: $('mReading').value.trim(), parts: $('mParts').value.trim(),
                       partsCost: $('mPartsCost').value.trim(), vendorCost: $('mVendorCost').value.trim(),
                       status: $('mStatus').value, field, fieldLoc: field ? $('mFieldLoc').value.trim() : '',
                       loc: null, _photo: $('mPhoto') };
@@ -517,13 +689,16 @@
       await post(payload);
       if (a.action === 'start') {
         PENDING[a.jobId] = { jobId: a.jobId, unit: a.unit, unitType: a.unitType, category: a.category,
-                             start: Date.now(), fieldLoc: a.fieldLoc, field: a.field,
+                             start: Date.now(), fieldLoc: a.fieldLoc, field: a.field, mech: a.mechanic,
+                             problem: a.problem,
                              startZone: describeLoc(a.loc, a.field).txt.replace(/^\S+\s/, '') };
         save(PENDING_KEY, PENDING);
-        $('sUnit').value = ''; $('sCat').value = ''; $('sField').checked = false; $('sFieldLoc').value = ''; toggleField('s');
+        $('sUnit').value = ''; $('sCat').value = ''; $('sProblem').value = '';
+        $('sField').checked = false; $('sFieldLoc').value = ''; toggleField('s');
+        HIST = { unit: '', jobs: [], state: 'idle' }; renderHistory();
         showOk('Started ' + a.unit + '. Tap Finish when you’re done.');
       } else {
-        ['mHours','mWork','mReading','mParts','mPartsCost','mVendorCost','mFieldLoc'].forEach(id => $(id).value = '');
+        ['mHours','mWork','mProblem','mReading','mParts','mPartsCost','mVendorCost','mFieldLoc'].forEach(id => $(id).value = '');
         $('mUnit').value = ''; $('mCat').value = ''; $('mField').checked = false; $('mPhoto').value = ''; toggleField('m');
         toggleManual();
         showOk('Past job logged for ' + a.unit + '.');
@@ -543,7 +718,8 @@
     const j = openJobs().find(x => x.jobId === jobId); if (!j) return;
     finishJob = j; finishLoc = null;
     $('fUnit').textContent = j.unit;
-    $('fSub').textContent = 'Started ' + fmtTime(j.start) + ' · ' + elapsed(j.start) + ' so far';
+    $('fSub').textContent = 'Started ' + fmtTime(j.start) + ' · ' + elapsed(j.start) + ' so far' +
+                            (j.problem ? ' · “' + j.problem + '”' : '');
     catOptions($('fCat'), false); $('fCat').value = j.category || '';
     ['fWork','fReading','fParts','fPartsCost','fVendorCost'].forEach(id => $(id).value = '');
     $('fPhoto').value = ''; $('fStatus').value = 'COMPLETE'; $('fErr').style.display = 'none';
